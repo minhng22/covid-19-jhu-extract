@@ -25,7 +25,12 @@ async def analyze(db):
     current_cases, current_countries, current_states, current_counties = data['current_cases'], data['current_countries'], data['current_states'], data['current_counties']
     current_d_cases, current_d_countries, current_d_states, current_d_counties = data['current_d_cases'], data['current_d_countries'], data['current_d_states'], data['current_d_counties']
     print('Start analyzing: ')
-    show_all_cases(current_cases, 'COUNTY', '5e88a40f511d40d6d86f3c93')
+    
+    show_all_cases(current_d_cases, [
+        {'territory_type': 'COUNTY', 'territory_id': '5e8b6f87802382a820edf6b1'},
+        {'territory_type': 'COUNTRY', 'territory_id': '5e8b6f74802382a820edef1a'}
+    ])
+
 
 def show_all_counties(current_countries: any, current_states: any, current_counties: any, country: str, state: str):
     c_id = find_country_id(current_countries, country)
@@ -37,7 +42,14 @@ def show_all_counties(current_countries: any, current_states: any, current_count
             print(cc) 
 
 
-def show_all_cases(current_cases, t_type, t_id):
+def show_all_cases(current_cases, info):
+    cases = []
+    for inf in info:
+        cases.append(get_cases(current_cases, inf['territory_type'], inf['territory_id']))
+    line_chart(cases)
+
+
+def get_cases(current_cases, t_type, t_id):
     cases = []
     for cc in current_cases:
         if cc['territory_type'] == t_type and cc['territory_id'] == t_id:
@@ -46,7 +58,7 @@ def show_all_cases(current_cases, t_type, t_id):
     print("Cases are ")
     for c in cases:
         print(c)
-    line_chart(cases)
+    return cases
 
 
 def show_new_case(current_cases, t_type, t_id):
@@ -61,16 +73,21 @@ def show_new_case(current_cases, t_type, t_id):
             new_cases.append(cc)
     for nc in new_cases:
         print(new_cases)
-    line_chart(new_cases)
+    line_chart([new_cases])
 
 
-def line_chart(cases):
+def line_chart(cases_series):
     time_stamps, no = [], []
-    for c in cases:
-        time_stamps.append(c['timestamp'])
-        no.append(c['no'])
+    for case in cases_series:
+        time_stamps_temp, no_temp = [], []
+        for c in case:
+            time_stamps_temp.append(c['timestamp'])
+            no_temp.append(c['no'])
+        time_stamps.append(time_stamps_temp)
+        no.append(no_temp)
     plt.ylabel('Case number')
-    plt.plot(time_stamps, no)
+    for i in range(len(cases_series)):
+        plt.plot(time_stamps[i], no[i], color='green', marker='o', linestyle='dashed', linewidth=1, markersize=6)
     plt.show()
 
 
