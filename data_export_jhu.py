@@ -7,47 +7,52 @@ from dotenv import load_dotenv
 from pathlib import Path  # python3 only
 import os
 
-
 def main():
+    case_type = ['POSITIVE', 'DEATH']
     env_path = Path('.') / '.env'
     load_dotenv(dotenv_path=env_path)
     MONGODB_CONNECT_STR = os.getenv('MONGODB_CONNECT_STR')
 
     client = AsyncIOMotorClient(MONGODB_CONNECT_STR)
     db = client.get_database("covid19")
+
+    for c_type in case_type:
+        export_data(c_type, db)
+
+def export_data(c_type: any, db: any):
     PATH = [
-        '../COVID-19/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv',
-        '../COVID-19/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_US.csv'
+        os.getenv('PATH_GLOBAL_POSITIVE') if (c_type == "POSITIVE") else os.getenv('PATH_GLOBAL_DEATH'),
+        os.getenv('PATH_US_POSITIVE') if (c_type == "POSITIVE") else os.getenv('PATH_US_DEATH')
     ]
-    asyncio.get_event_loop().run_until_complete(update_territory(db, PATH))
-    asyncio.get_event_loop().run_until_complete(update_cases(db, PATH))
+    asyncio.get_event_loop().run_until_complete(update_territory(c_type, db, PATH))
+    asyncio.get_event_loop().run_until_complete(update_cases(c_type, db, PATH))
 
 
-async def update_territory(db: any, PATH: list):
-    await update_country(db, PATH)
-    await update_state(db, PATH)
-    await update_county(db, PATH)
+async def update_territory(c_type: any, db: any, PATH: list):
+    await update_country(c_type, db, PATH)
+    await update_state(c_type, db, PATH)
+    await update_county(c_type, db, PATH)
 
 
-async def update_cases(db, PATH):
-    current_cases_col = db.get_collection('Case')
+async def update_cases(c_type, db, PATH):
+    current_cases_col = db.get_collection('Case' if (c_type == "POSITIVE") else 'CaseDeath')
     current_cases = await current_cases_col.find().to_list(length = 1000000)
-    print('Current cases: ', current_cases)
-    new_cases = await update_live_data_cases(db, PATH, current_cases)
-    print('New case count: ', len(new_cases))
-    # for c in new_cases:
-    #     current_cases_col.insert_one({
-    #         'no': c['no'],
-    #         'timestamp': c['timestamp'],
-    #         'territory_type': c['territory_type'],
-    #         'territory_id': c['territory_id']
-    #     })
+    print('Current ' , c_type, ' cases: ', current_cases)
+    new_cases = await update_live_data_cases(c_type, db, PATH, current_cases)
+    print('New ' , c_type, ' case count: ', len(new_cases))
+    for c in new_cases:
+        current_cases_col.insert_one({
+            'no': c['no'],
+            'timestamp': c['timestamp'],
+            'territory_type': c['territory_type'],
+            'territory_id': c['territory_id']
+        })
 
 
-async def update_live_data_cases(db, paths, current_cases):
-    current_counties = await db.get_collection('County').find().to_list(length = 20000)
-    current_countries = await db.get_collection('Country').find().to_list(length = 500)
-    current_states = await db.get_collection('State').find().to_list(length = 500)
+async def update_live_data_cases(c_type, db, paths, current_cases):
+    current_counties = await db.get_collection('County' if (c_type == "POSITIVE") else 'CountyDeath').find().to_list(length = 20000)
+    current_countries = await db.get_collection('Country' if (c_type == "POSITIVE") else 'CountryDeath').find().to_list(length = 500)
+    current_states = await db.get_collection('State' if (c_type == "POSITIVE") else 'StateDeath').find().to_list(length = 500)
     new_cases = []
 
     for i,p in enumerate(paths):
@@ -79,25 +84,25 @@ async def update_live_data_cases(db, paths, current_cases):
     return new_cases    
 
 
-async def update_country(db: any, PATH: list):
-    country_data_col = db.get_collection('Country')
+async def update_country(c_type: any, db: any, PATH: list):
+    country_data_col = db.get_collection('Country' if (c_type == "POSITIVE") else "CountryDeath")
     prev_countries = await country_data_col.find().to_list(length = 500)
-    print('Prev countries count: ', len(prev_countries))
-    new_countries = update_live_data_countries(prev_countries, PATH[0])
-    print('New countries: ', new_countries)
+    print('Prev ' , c_type, ' countries count: ', len(prev_countries))
+    new_countries = update_live_data_countries(c_type, prev_countries, PATH[0])
+    print('New ' , c_type, ' countries: ', new_countries)
     for c in new_countries:
         country_data_col.insert_one({
             'name': c
         })
 
 
-async def update_state(db, PATH):
-    state_data_col = db.get_collection('State')
+async def update_state(c_type, db, PATH):
+    state_data_col = db.get_collection('State' if (c_type == "POSITIVE") else 'StateDeath')
     prev_states = await state_data_col.find().to_list(length = 500)
-    current_countries = await db.get_collection('Country').find().to_list(length = 500)
-    new_states = update_live_data_states(current_countries, prev_states, PATH)
-    print('New states count: ', len(new_states))
-    print('New states: ', new_states)
+    current_countries = await db.get_collection('Country' if (c_type == "POSITIVE") else 'CountryDeath').find().to_list(length = 500)
+    new_states = update_live_data_states(c_type, current_countries, prev_states, PATH)
+    print('New ' , c_type, ' states count: ', len(new_states))
+    print('New ' , c_type, ' states: ', new_states)
     for s in new_states:
         state_data_col.insert_one({
             'country_id': s['country_id'],
@@ -105,15 +110,15 @@ async def update_state(db, PATH):
         })
 
 
-async def update_county(db, PATH):
-    county_data_col = db.get_collection('County')
+async def update_county(c_type, db, PATH):
+    county_data_col = db.get_collection('County' if (c_type == "POSITIVE") else 'CountyDeath')
     prev_counties = await county_data_col.find().to_list(length = 20000)
-    current_countries = await db.get_collection('Country').find().to_list(length = 500)
-    current_states = await db.get_collection('State').find().to_list(length = 500)
+    current_countries = await db.get_collection('Country' if (c_type == "POSITIVE") else 'CountryDeath').find().to_list(length = 500)
+    current_states = await db.get_collection('State' if (c_type == "POSITIVE") else 'StateDeath').find().to_list(length = 500)
 
-    print('Previous counties count: ', len(prev_counties))
-    new_counties = update_live_data_counties(current_countries, current_states, prev_counties, PATH[1])
-    print('New counties count: ', len(new_counties))
+    print('Previous ' , c_type, ' counties count: ', len(prev_counties))
+    new_counties = update_live_data_counties(c_type, current_countries, current_states, prev_counties, PATH[1])
+    print('New ' , c_type, ' counties count: ', len(new_counties))
     for s in new_counties:
         county_data_col.insert_one({
             'state_id': s['state_id'],
@@ -121,7 +126,7 @@ async def update_county(db, PATH):
         })
 
 
-def update_live_data_countries(prev_countries: list, PATH: str) -> list:
+def update_live_data_countries(c_type: any, prev_countries: list, PATH: str) -> list:
     countries_update = []
     with open( PATH, 'r' ) as the_file:
         reader = csv.DictReader(the_file)
@@ -138,7 +143,7 @@ def country_not_added (countries: list, c: str) -> bool:
     return True
 
 
-def update_live_data_states(current_countries, prev_states, paths):
+def update_live_data_states(c_type: any,current_countries: any, prev_states: any, paths: any):
     state_update = []
     for i,p in enumerate(paths):
         with open( p, 'r' ) as the_file:
@@ -170,7 +175,7 @@ def not_added_county(current_counties, state_id, county):
     return True
 
 
-def update_live_data_counties(current_countries, current_states, prev_counties, PATH):
+def update_live_data_counties(c_type: any, current_countries, current_states, prev_counties, PATH):
     county_update = []
     with open( PATH, 'r' ) as the_file:
             reader = csv.DictReader(the_file)
