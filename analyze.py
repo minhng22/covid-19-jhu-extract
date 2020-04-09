@@ -6,7 +6,7 @@ from datetime import timedelta
 from dotenv import load_dotenv
 from pathlib import Path  # python3 only
 import os
-from data_export_jhu import find_state_id, find_country_id
+from exp import find_state_id, find_country_id
 import matplotlib.pyplot as plt
 
 def main():
@@ -27,19 +27,25 @@ async def analyze(db):
     print('Start analyzing: ')
     
     show_all_cases(current_d_cases, [
-        {'territory_type': 'COUNTY', 'territory_id': '5e8b6f87802382a820edf6b1'},
-        {'territory_type': 'COUNTRY', 'territory_id': '5e8b6f74802382a820edef1a'}
+        {'territory_type': 'COUNTY', 'territory_id': '5e8dd9b779434e2690cb30f3'},
+        {'territory_type': 'COUNTRY', 'territory_id': '5e8dd9a379434e2690cb2909'}
     ])
 
 
 def show_all_counties(current_countries: any, current_states: any, current_counties: any, country: str, state: str):
+    print('Current counties: ', get_all_counties(current_countries, current_states, current_counties, country, state))
+
+
+def get_all_counties(current_countries: any, current_states: any, current_counties: any, country: str, state: str):
     c_id = find_country_id(current_countries, country)
     s_id = find_state_id(current_states, state, c_id)
+    cty = []
 
     print("Querrying state: ", state, " with id ", s_id ," of country: ", country, " of id ", c_id)
     for cc in current_counties:
         if cc['state_id'] == s_id:
-            print(cc) 
+            cty.append(cc)
+    return cty 
 
 
 def show_all_cases(current_cases, info):
@@ -60,6 +66,9 @@ def get_cases(current_cases, t_type, t_id):
         print(c)
     return cases
 
+
+def get_state_cases(current_countries: any, current_states: any, current_counties: any, country: str, state: str):
+    counties = get_all_counties(current_countries, current_states, current_counties, country, state)
 
 def show_new_case(current_cases, t_type, t_id):
     new_cases = []

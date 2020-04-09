@@ -24,10 +24,18 @@ def export_data(c_type: any, db: any):
         os.getenv('PATH_GLOBAL_POSITIVE') if (c_type == "POSITIVE") else os.getenv('PATH_GLOBAL_DEATH'),
         os.getenv('PATH_US_POSITIVE') if (c_type == "POSITIVE") else os.getenv('PATH_US_DEATH')
     ]
+    asyncio.get_event_loop().run_until_complete(clean_db(c_type, db))
     asyncio.get_event_loop().run_until_complete(update_territory(c_type, db, PATH))
     asyncio.get_event_loop().run_until_complete(update_cases(c_type, db, PATH))
 
 
+async def clean_db(c_type, db):
+    await db.drop_collection('County' if (c_type == "POSITIVE") else 'CountyDeath')
+    await db.drop_collection('State' if (c_type == "POSITIVE") else 'StateDeath')
+    await db.drop_collection('Country' if (c_type == "POSITIVE") else 'CountryDeath')
+    await db.drop_collection('Case' if (c_type == "POSITIVE") else 'CaseDeath')
+
+    
 async def update_territory(c_type: any, db: any, PATH: list):
     await update_country(c_type, db, PATH)
     await update_state(c_type, db, PATH)
@@ -69,7 +77,7 @@ async def update_live_data_cases(c_type, db, paths, current_cases):
                     territory_type = "COUNTY"
                     ter_name = line['Admin2']
                     territory_id = find_county_id(current_counties, line['Admin2'], find_state_id(current_states, in_line_state, c_id))
-                elif is_state(line, p):
+                elif is_state(c_type, line, p):
                     territory_type = "STATE"
                     ter_name = in_line_state
                     territory_id = find_state_id(current_states, in_line_state, c_id)
@@ -149,7 +157,7 @@ def update_live_data_states(c_type: any,current_countries: any, prev_states: any
         with open( p, 'r' ) as the_file:
             reader = csv.DictReader(the_file)
             for line in reader:
-                if is_state(line, p):
+                if is_state(c_type, line, p):
                     in_line_state = line['Province/State'] if i == 0 else line['Province_State']
                     in_line_country = line['Country/Region'] if i == 0 else line['Country_Region']
 
@@ -266,8 +274,8 @@ def is_counties(line):
     return 'Admin2' in line.keys() and line['Admin2'] != ""
 
 
-def is_state(line, path):
-    if path == '../COVID-19/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv':
+def is_state(c_type, line, path):
+    if path == os.getenv('PATH_GLOBAL_POSITIVE') if (c_type == "POSITIVE") else os.getenv('PATH_GLOBAL_DEATH'):
         return 'Province/State' in line.keys() and line['Province/State'] != ""
     else:
         return 'Province_State' in line.keys() and line['Province_State'] != ""
