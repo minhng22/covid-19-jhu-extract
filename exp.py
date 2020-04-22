@@ -13,11 +13,18 @@ def main():
     load_dotenv(dotenv_path=env_path)
     MONGODB_CONNECT_STR = os.getenv('MONGODB_CONNECT_STR')
 
+    print(COUNTY_LENGTH)
+
     client = AsyncIOMotorClient(MONGODB_CONNECT_STR)
     db = client.get_database("covid19")
 
     for c_type in case_type:
         export_data(c_type, db)
+
+COUNTY_LENGTH = 10000000
+CASE_LENGTH = 100000000
+COUNTRY_LENGTH = 1000
+STATE_LENGTH = 100000
 
 def export_data(c_type: any, db: any):
     PATH = [
@@ -44,7 +51,7 @@ async def update_territory(c_type: any, db: any, PATH: list):
 
 async def update_cases(c_type, db, PATH):
     current_cases_col = db.get_collection('Case' if (c_type == "POSITIVE") else 'CaseDeath')
-    current_cases = await current_cases_col.find().to_list(length = 1000000)
+    current_cases = await current_cases_col.find().to_list(length = CASE_LENGTH)
     print('Current ' , c_type, ' cases: ', current_cases)
     new_cases = await update_live_data_cases(c_type, db, PATH, current_cases)
     print('New ' , c_type, ' case count: ', len(new_cases))
@@ -58,9 +65,9 @@ async def update_cases(c_type, db, PATH):
 
 
 async def update_live_data_cases(c_type, db, paths, current_cases):
-    current_counties = await db.get_collection('County' if (c_type == "POSITIVE") else 'CountyDeath').find().to_list(length = 20000)
-    current_countries = await db.get_collection('Country' if (c_type == "POSITIVE") else 'CountryDeath').find().to_list(length = 500)
-    current_states = await db.get_collection('State' if (c_type == "POSITIVE") else 'StateDeath').find().to_list(length = 500)
+    current_counties = await db.get_collection('County' if (c_type == "POSITIVE") else 'CountyDeath').find().to_list(length = COUNTY_LENGTH)
+    current_countries = await db.get_collection('Country' if (c_type == "POSITIVE") else 'CountryDeath').find().to_list(length = COUNTRY_LENGTH)
+    current_states = await db.get_collection('State' if (c_type == "POSITIVE") else 'StateDeath').find().to_list(length = STATE_LENGTH)
     new_cases = []
 
     for i,p in enumerate(paths):
@@ -85,16 +92,14 @@ async def update_live_data_cases(c_type, db, paths, current_cases):
                     territory_type = "COUNTRY"
                     territory_id = c_id
                     ter_name = in_line_country
-                print('name: ', ter_name)
                 c = get_cases_in_line(territory_id, territory_type, line, current_cases)
-                print('Adding: ', c)
                 new_cases.extend(c)
     return new_cases    
 
 
 async def update_country(c_type: any, db: any, PATH: list):
     country_data_col = db.get_collection('Country' if (c_type == "POSITIVE") else "CountryDeath")
-    prev_countries = await country_data_col.find().to_list(length = 500)
+    prev_countries = await country_data_col.find().to_list(length = COUNTRY_LENGTH)
     print('Prev ' , c_type, ' countries count: ', len(prev_countries))
     new_countries = update_live_data_countries(c_type, prev_countries, PATH[0])
     print('New ' , c_type, ' countries: ', new_countries)
@@ -106,8 +111,8 @@ async def update_country(c_type: any, db: any, PATH: list):
 
 async def update_state(c_type, db, PATH):
     state_data_col = db.get_collection('State' if (c_type == "POSITIVE") else 'StateDeath')
-    prev_states = await state_data_col.find().to_list(length = 500)
-    current_countries = await db.get_collection('Country' if (c_type == "POSITIVE") else 'CountryDeath').find().to_list(length = 500)
+    prev_states = await state_data_col.find().to_list(length = STATE_LENGTH)
+    current_countries = await db.get_collection('Country' if (c_type == "POSITIVE") else 'CountryDeath').find().to_list(length = COUNTRY_LENGTH)
     new_states = update_live_data_states(c_type, current_countries, prev_states, PATH)
     print('New ' , c_type, ' states count: ', len(new_states))
     print('New ' , c_type, ' states: ', new_states)
@@ -120,9 +125,9 @@ async def update_state(c_type, db, PATH):
 
 async def update_county(c_type, db, PATH):
     county_data_col = db.get_collection('County' if (c_type == "POSITIVE") else 'CountyDeath')
-    prev_counties = await county_data_col.find().to_list(length = 20000)
-    current_countries = await db.get_collection('Country' if (c_type == "POSITIVE") else 'CountryDeath').find().to_list(length = 500)
-    current_states = await db.get_collection('State' if (c_type == "POSITIVE") else 'StateDeath').find().to_list(length = 500)
+    prev_counties = await county_data_col.find().to_list(length = COUNTY_LENGTH)
+    current_countries = await db.get_collection('Country' if (c_type == "POSITIVE") else 'CountryDeath').find().to_list(length = COUNTRY_LENGTH)
+    current_states = await db.get_collection('State' if (c_type == "POSITIVE") else 'StateDeath').find().to_list(length = STATE_LENGTH)
 
     print('Previous ' , c_type, ' counties count: ', len(prev_counties))
     new_counties = update_live_data_counties(c_type, current_countries, current_states, prev_counties, PATH[1])
@@ -160,8 +165,9 @@ def update_live_data_states(c_type: any,current_countries: any, prev_states: any
                 if is_state(c_type, line, p):
                     in_line_state = line['Province/State'] if i == 0 else line['Province_State']
                     in_line_country = line['Country/Region'] if i == 0 else line['Country_Region']
+                    in_line_country_id = find_country_id(current_countries, in_line_country)
 
-                    if new_state(current_countries, prev_states, in_line_state, in_line_country) and not_added_state(state_update, find_country_id(current_countries, in_line_country),in_line_state):
+                    if new_state(current_countries, prev_states, in_line_state, in_line_country) and not_added_state(state_update, in_line_country_id,in_line_state):
                         state_update.append({
                             'country_id': find_country_id(current_countries, in_line_country),
                             'name': in_line_state
@@ -207,23 +213,18 @@ def find_country_id(current_countries, name):
 
 def get_cases_in_line(territory_id, territory_type, line, update_cases):
     x, cases = datetime(2020, 1, 22), []
-    print('Now is: ', datetime.now())
 
     while x < datetime.now() and x.strftime("%-m/%-d/%y") in line.keys():
         f_date = x.strftime("%-m/%-d/%y")
-        print('date: ', f_date)
-        print('data: ', line[f_date])
         c_dict = dict()
         c_dict['no'] = line[f_date]
         c_dict['timestamp'] = f_date
         c_dict['territory_type'] = territory_type
         c_dict['territory_id'] = territory_id
-        print('CDict: ', c_dict)
         if new_cases(update_cases, c_dict):
             cases.append(c_dict)
 
         x += timedelta(days=1)  
-        print(x.strftime("%-m/%-d/%y"))
 
     return cases
 
@@ -275,7 +276,7 @@ def is_counties(line):
 
 
 def is_state(c_type, line, path):
-    if path == os.getenv('PATH_GLOBAL_POSITIVE') if (c_type == "POSITIVE") else os.getenv('PATH_GLOBAL_DEATH'):
+    if path == (os.getenv('PATH_GLOBAL_POSITIVE') if (c_type == "POSITIVE") else os.getenv('PATH_GLOBAL_DEATH')):
         return 'Province/State' in line.keys() and line['Province/State'] != ""
     else:
         return 'Province_State' in line.keys() and line['Province_State'] != ""
